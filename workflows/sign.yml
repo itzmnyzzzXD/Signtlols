@@ -1,0 +1,45 @@
+name: Sign IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      ipa_url:
+        description: 'URL of the unsigned IPA'
+        required: true
+      p12_url:
+        description: 'URL of the P12 cert'
+        required: true
+      provision_url:
+        description: 'URL of the mobileprovision'
+        required: true
+      p12_password:
+        description: 'Password for the P12 cert'
+        required: true
+
+jobs:
+  sign:
+    runs-on: macos-latest
+    steps:
+      - name: Install zsign
+        run: |
+          brew install openssl
+          git clone --depth 1 https://github.com/zhlynn/zsign.git
+          cd zsign
+          g++ *.cpp -lcrypto -O3 -o zsign
+          sudo cp zsign /usr/local/bin/zsign
+
+      - name: Download Files
+        run: |
+          curl -L "${{ github.event.inputs.ipa_url }}" -o unsigned.ipa
+          curl -L "${{ github.event.inputs.p12_url }}" -o cert.p12
+          curl -L "${{ github.event.inputs.provision_url }}" -o profile.mobileprovision
+
+      - name: Run Codesign (zsign)
+        run: |
+          zsign -k cert.p12 -p '${{ github.event.inputs.p12_password }}' -m profile.mobileprovision -o signed.ipa unsigned.ipa
+
+      - name: Upload Signed Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-app
+          path: signed.ipa
